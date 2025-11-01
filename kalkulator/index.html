@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kalkulator Sederhana</title>
+  <style>
+    :root{
+      --bg:#f8f9fb;
+      --card:#ffffff;
+      --accent:#7c5cff;
+      --muted:#6b7280;
+      --btn:#eef2ff;
+      --danger:#ff6b6b;
+      --glass: rgba(124,92,255,0.08);
+      font-family: Inter, "Segoe UI", Roboto, sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:linear-gradient(135deg,#f0f7ff 0%, #f8fbf2 100%);
+      color:#111827;
+      padding:20px;
+    }
+
+    .card{
+      width:340px;
+      background:var(--card);
+      border-radius:16px;
+      box-shadow:0 8px 30px rgba(16,24,40,0.08);
+      padding:18px;
+    }
+
+    .title{
+      font-weight:700;
+      font-size:18px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+    }
+    .sub{
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .display{
+      margin-top:12px;
+      background:var(--bg);
+      border-radius:10px;
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-height:70px;
+    }
+    .expr{
+      font-size:14px;
+      color:var(--muted);
+      word-break:break-all;
+      min-height:18px;
+    }
+    .res{
+      font-size:22px;
+      font-weight:600;
+      text-align:right;
+      word-break:break-all;
+    }
+
+    .pad{
+      margin-top:14px;
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:10px;
+    }
+    button.key{
+      border:0;
+      background:var(--btn);
+      padding:14px;
+      border-radius:10px;
+      font-size:16px;
+      cursor:pointer;
+      box-shadow:inset 0 -2px 0 rgba(0,0,0,0.03);
+      transition:transform .08s ease, box-shadow .08s;
+      user-select:none;
+    }
+    button.key:active{ transform:translateY(1px); }
+    button.op{ background:var(--glass); color:var(--accent); font-weight:600; }
+    button.equal{ background:var(--accent); color:white; grid-column: span 2; }
+    button.clear{ background:var(--danger); color:white; }
+    button.wide{ grid-column: span 2; }
+
+    .hint{
+      margin-top:12px;
+      font-size:12px;
+      color:var(--muted);
+      text-align:center;
+    }
+
+    /* small screens */
+    @media (max-width:380px){
+      .card{ width:100% }
+    }
+  </style>
+</head>
+<body>
+  <div class="card" role="application" aria-label="Kalkulator sederhana">
+    <div class="title">
+      <div>
+        <div>Kalkulator Sederhana</div>
+        <div class="sub">Hitung cepat — mamamu bantuin ya 💕</div>
+      </div>
+      <div aria-hidden="true">🧮</div>
+    </div>
+
+    <div class="display" aria-live="polite">
+      <div id="expr" class="expr" aria-label="Ekspresi"></div>
+      <div id="res" class="res" aria-label="Hasil">0</div>
+    </div>
+
+    <div class="pad" role="group" aria-label="Tombol kalkulator">
+      <button class="key clear" data-action="clear" title="Clear (C)">C</button>
+      <button class="key" data-action="back" title="Backspace (⌫)">⌫</button>
+      <button class="key" data-value="(">(</button>
+      <button class="key" data-value=")">)</button>
+
+      <button class="key" data-value="7">7</button>
+      <button class="key" data-value="8">8</button>
+      <button class="key" data-value="9">9</button>
+      <button class="key op" data-value="/">÷</button>
+
+      <button class="key" data-value="4">4</button>
+      <button class="key" data-value="5">5</button>
+      <button class="key" data-value="6">6</button>
+      <button class="key op" data-value="*">×</button>
+
+      <button class="key" data-value="1">1</button>
+      <button class="key" data-value="2">2</button>
+      <button class="key" data-value="3">3</button>
+      <button class="key op" data-value="-">−</button>
+
+      <button class="key wide" data-value="0">0</button>
+      <button class="key" data-value=".">.</button>
+      <button class="key op" data-value="+">+</button>
+
+      <button class="key" data-action="percent">%</button>
+      <button class="key equal" data-action="eval">=</button>
+    </div>
+
+    <div class="hint">Bisa pakai keyboard: angka, + - * / ( ) . Enter untuk =, Backspace, Esc untuk clear.</div>
+  </div>
+
+  <script>
+    (function(){
+      const exprEl = document.getElementById('expr');
+      const resEl = document.getElementById('res');
+      let expr = '';
+
+      // helper: sanitize allowed characters before evaluation
+      function isSafeExpression(s){
+        // only digits, whitespace, parentheses, dot, and operators + - * / %
+        return /^[0-9+\-*/().%\s]*$/.test(s);
+      }
+
+      function formatResult(n){
+        if (!isFinite(n)) return 'Error';
+        // limit to max 10 decimal places, trim trailing zeros
+        if (Math.abs(n - Math.round(n)) < 1e-12) return String(Math.round(n));
+        return parseFloat(n.toFixed(10)).toString();
+      }
+
+      function updateDisplay(){
+        exprEl.textContent = expr || '';
+        // show interim result when last char is number or closing parenthesis
+        const trimmed = expr.trim();
+        if (trimmed && /[0-9)]$/.test(trimmed) && isSafeExpression(trimmed)){
+          try{
+            // use Function to evaluate after safety check
+            const val = Function('"use strict"; return (' + trimmed + ')')();
+            resEl.textContent = formatResult(val);
+          }catch(e){
+            resEl.textContent = '...';
+          }
+        }else{
+          resEl.textContent = expr ? '' : '0';
+        }
+      }
+
+      function appendValue(v){
+        // avoid multiple dots in a number block: simple heuristic
+        const lastToken = expr.split(/[\s+\-*/()%]+/).pop();
+        if (v === '.' && lastToken && lastToken.includes('.')) return;
+        expr += v;
+        updateDisplay();
+      }
+
+      function clearAll(){
+        expr = '';
+        updateDisplay();
+      }
+
+      function backspace(){
+        expr = expr.slice(0,-1);
+        updateDisplay();
+      }
+
+      function percent(){
+        // transform trailing number into number/100
+        const m = expr.match(/(.*?)([0-9.]+)\s*$/);
+        if (m){
+          expr = m[1] + '(' + m[2] + '/100)';
+          updateDisplay();
+        }
+      }
+
+      function evaluateExpression(){
+        const trimmed = expr.trim();
+        if (!trimmed) return;
+        if (!isSafeExpression(trimmed)){
+          resEl.textContent = 'Invalid';
+          return;
+        }
+        try{
+          const result = Function('"use strict"; return (' + trimmed + ')')();
+          if (!isFinite(result)) {
+            resEl.textContent = 'Error';
+            return;
+          }
+          expr = String(formatResult(result));
+          updateDisplay();
+        }catch(e){
+          resEl.textContent = 'Error';
+        }
+      }
+
+      // button handling
+      document.querySelectorAll('.pad button').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const v = btn.dataset.value;
+          const a = btn.dataset.action;
+          if (a === 'clear') return clearAll();
+          if (a === 'back') return backspace();
+          if (a === 'eval') return evaluateExpression();
+          if (a === 'percent') return percent();
+          if (v) return appendValue(v);
+        });
+      });
+
+      // keyboard support
+      window.addEventListener('keydown', (e)=>{
+        if (e.key === 'Enter') { e.preventDefault(); evaluateExpression(); return; }
+        if (e.key === 'Escape') { e.preventDefault(); clearAll(); return; }
+        if (e.key === 'Backspace') { e.preventDefault(); backspace(); return; }
+        // allow digits, operators, parentheses, dot, percent
+        if (/^[0-9+\-*/().%]$/.test(e.key)){
+          e.preventDefault();
+          // map × and ÷ from numpad? usually * and /
+          appendValue(e.key);
+        }
+        // keypad Enter often 'Enter' already handled
+      });
+
+      // initialize
+      updateDisplay();
+
+      // small accessibility: announce result when evaluated
+      const observer = new MutationObserver(()=> {
+        // if result was updated to 'Error' or number after an eval, set aria-live already set
+      });
+      observer.observe(resEl, {childList:true, subtree:true});
+    })();
+  </script>
+</body>
+</html>
